@@ -1977,7 +1977,7 @@ const cloudUrlInput = document.getElementById('cloudUrlInput');
 const cloudTokenInput = document.getElementById('cloudTokenInput');
 const cloudStatusMsg = document.getElementById('cloudStatusMsg');
 
-cloudUrlInput.value = localStorage.getItem('wg_cloud_url') || '';
+cloudUrlInput.value = localStorage.getItem('wg_cloud_url') || 'https://wg-einrichtung-default-rtdb.europe-west1.firebasedatabase.app/wgplan.json';
 cloudTokenInput.value = localStorage.getItem('wg_cloud_token') || '';
 
 document.getElementById('btnCloudModal').addEventListener('click', () => cloudModal.classList.add('open'));
