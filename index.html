@@ -1,0 +1,2037 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WG- & Raumplaner 2D/3D (inkl. Dachschrägen-Check)</title>
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-panel: #1e293b;
+      --bg-card: #334155;
+      --border: #475569;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* TOP BAR */
+    header {
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      z-index: 20;
+    }
+    .room-tabs, .view-tabs, .action-btns {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    button {
+      background: var(--bg-card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 11px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    button:hover { background: #475569; }
+    button.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+    button.danger { background: rgba(239,68,68,0.2); border-color: var(--danger); color: #fca5a5; }
+    button.danger:hover { background: var(--danger); color: #fff; }
+    button.success { background: rgba(16,185,129,0.2); border-color: var(--success); color: #6ee7b7; }
+    button.success:hover { background: var(--success); color: #fff; }
+
+    /* MAIN LAYOUT */
+    .workspace {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* LEFT SIDEBAR */
+    aside {
+      width: 340px;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 12px;
+      gap: 14px;
+      z-index: 10;
+    }
+    .section-box {
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 7px;
+    }
+    .form-row {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+    }
+    label {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      flex: 1;
+    }
+    input[type="text"], input[type="number"], select {
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 8px;
+      border-radius: 5px;
+      font-size: 13px;
+      width: 100%;
+    }
+    input[type="color"] {
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      height: 31px;
+      width: 44px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+    .preset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .preset-btn {
+      text-align: left;
+      font-size: 12px;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+    }
+    .preset-btn small { color: var(--text-muted); font-size: 10px; }
+
+    .status-banner {
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.4;
+      font-weight: 500;
+    }
+    .status-ok { background: rgba(16,185,129,0.15); border: 1px solid var(--success); color: #6ee7b7; }
+    .status-warn { background: rgba(245,158,11,0.15); border: 1px solid var(--warning); color: #fcd34d; }
+    .status-err { background: rgba(239,68,68,0.2); border: 1px solid var(--danger); color: #fca5a5; }
+
+    /* VIEWPORTS */
+    .viewport-container {
+      flex: 1;
+      display: flex;
+      position: relative;
+      background: #0b1120;
+      overflow: hidden;
+    }
+    .pane {
+      flex: 1;
+      position: relative;
+      height: 100%;
+      overflow: hidden;
+    }
+    .pane-2d { border-right: 1px solid var(--border); }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    .hud-overlay {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      pointer-events: none;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .swatch { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
+
+    /* MODAL */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      display: none;
+      place-items: center;
+      z-index: 100;
+    }
+    .modal-backdrop.open { display: grid; }
+    .modal {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 480px;
+      max-width: 92vw;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .modal h3 { font-size: 16px; }
+    .modal p { font-size: 12px; color: var(--text-muted); line-height: 1.45; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+
+<header>
+  <div class="room-tabs" id="roomTabs">
+    <button data-room="overview" class="active">🏠 Gesamtübersicht</button>
+    <button data-room="wohnzimmer">🛋️ Wohnzimmer (37,84 m²)</button>
+    <button data-room="zimmer2">🛏️ Zimmer Mitte (12,39 m²)</button>
+    <button data-room="zimmer3">🖥️ Zimmer Oben Rechts (14,00 m²)</button>
+    <button data-room="zimmer4">🌿 Zimmer Unten Rechts (9,13 m²)</button>
+  </div>
+
+  <div class="view-tabs" id="viewTabs">
+    <button data-view="2d" class="active">📐 2D Grundriss</button>
+    <button data-view="split">🌗 Split (2D + 3D)</button>
+    <button data-view="3d">🧊 3D Ansicht</button>
+  </div>
+
+  <div class="action-btns">
+    <button id="btnResetCam" title="Ansicht zentrieren">🎯 Zentrieren</button>
+    <button id="btnCloudModal">☁️ Cloud-Sync</button>
+    <button id="btnExport">💾 Speichern (.json)</button>
+    <button id="btnImport">📂 Laden</button>
+    <input type="file" id="fileInput" accept=".json" style="display:none" />
+  </div>
+</header>
+
+<div class="workspace">
+  <aside>
+    <!-- SELECTED ITEM INSPECTOR -->
+    <div class="section-box" id="inspectorBox">
+      <div class="section-title">
+        <span>🎯 Ausgewähltes Möbelstück</span>
+        <span id="selRoomBadge" style="font-size:11px; color:var(--accent);"></span>
+      </div>
+      <div id="noSelectionMsg" style="font-size:12px; color:var(--text-muted);">
+        Klicke im 2D-Grundriss auf ein Möbelstück, um Maße, Drehung und Dachschrägen-Abstand zu prüfen (oder wähle ein Zimmer aus).
+      </div>
+      <div id="selectionControls" style="display:none; flex-direction:column; gap:8px;">
+        <div class="form-row">
+          <label>Bezeichnung
+            <input type="text" id="selName" />
+          </label>
+          <label style="flex:0 0 44px;">Farbe
+            <input type="color" id="selColor" />
+          </label>
+        </div>
+        <div class="form-grid">
+          <label>Breite (cm)
+            <input type="number" id="selW" min="10" max="600" step="1" />
+          </label>
+          <label>Tiefe (cm)
+            <input type="number" id="selD" min="10" max="600" step="1" />
+          </label>
+          <label>Höhe (cm)
+            <input type="number" id="selH" min="10" max="250" step="1" />
+          </label>
+        </div>
+        <div class="form-grid">
+          <label>Pos X (cm)
+            <input type="number" id="selX" step="1" />
+          </label>
+          <label>Pos Y (cm)
+            <input type="number" id="selY" step="1" />
+          </label>
+          <label>Drehung (°)
+            <input type="number" id="selRot" step="15" />
+          </label>
+        </div>
+        <div class="form-row">
+          <button id="btnRotLeft" style="flex:1;">↺ -45°</button>
+          <button id="btnRot90" style="flex:1;">↻ +90°</button>
+          <button id="btnDuplicate" style="flex:1;">📋 Kopie</button>
+          <button id="btnDelete" class="danger" style="flex:1;">🗑️ Löschen</button>
+        </div>
+        <div id="collisionBanner" class="status-banner status-ok"></div>
+      </div>
+    </div>
+
+    <!-- ADD CUSTOM FURNITURE -->
+    <div class="section-box">
+      <div class="section-title">➕ Eigenes Möbel erstellen</div>
+      <div class="form-row">
+        <label>Name
+          <input type="text" id="newName" placeholder="z.B. Kleiderschrank PAX" value="Schrank" />
+        </label>
+        <label style="flex:0 0 44px;">Farbe
+          <input type="color" id="newColor" value="#3b82f6" />
+        </label>
+      </div>
+      <div class="form-grid">
+        <label>Breite (cm)
+          <input type="number" id="newW" value="100" min="10" max="500" />
+        </label>
+        <label>Tiefe (cm)
+          <input type="number" id="newD" value="60" min="10" max="500" />
+        </label>
+        <label>Höhe (cm)
+          <input type="number" id="newH" value="200" min="10" max="250" />
+        </label>
+      </div>
+      <button id="btnAddCustom" class="active" style="justify-content:center; width:100%;">
+        ➕ In aktuellen Raum einfügen
+      </button>
+    </div>
+
+    <!-- QUICK PRESETS -->
+    <div class="section-box">
+      <div class="section-title">📦 Schnell-Vorlagen (Standardmaße)</div>
+      <div class="preset-grid" id="presetGrid"></div>
+    </div>
+
+    <!-- ROOF & ROOM CALIBRATION -->
+    <div class="section-box">
+      <div class="section-title">📐 Dachschrägen & Optionen</div>
+      <label style="flex-direction:row; align-items:center; gap:8px; color:var(--text); cursor:pointer;">
+        <input type="checkbox" id="chkSnap" checked />
+        <span>Wand- & 5cm-Raster-Snapping aktiv</span>
+      </label>
+      <label style="flex-direction:row; align-items:center; gap:8px; color:var(--text); cursor:pointer;">
+        <input type="checkbox" id="chkWintergartenLock" checked />
+        <span>Wintergarten (links oben) als feste Sperrzone</span>
+      </label>
+      <div class="form-grid" style="margin-top:4px;">
+        <label title="Kniestockhöhe an Nord-/Südwand (Standard: 60 cm)">Kniestock N/S
+          <input type="number" id="cfgKneeNS" value="60" min="20" max="140" />
+        </label>
+        <label title="Kniestockhöhe an Ostwand rechts (Standard: 90 cm)">Kniestock Ost
+          <input type="number" id="cfgKneeE" value="90" min="20" max="140" />
+        </label>
+        <label title="Maximale Deckenhöhe im Raum (Standard: 248 cm)">Deckenhöhe
+          <input type="number" id="cfgCeilH" value="248" min="210" max="300" />
+        </label>
+      </div>
+      <div class="form-row">
+        <label>Sicherheitspuffer zur Schräge (cm): <span id="lblBuffer">3 cm</span>
+          <input type="range" id="cfgBuffer" min="0" max="15" value="3" />
+        </label>
+      </div>
+    </div>
+  </aside>
+
+  <!-- VIEWPORTS -->
+  <div class="viewport-container">
+    <div class="pane pane-2d" id="pane2D">
+      <canvas id="canvas2D"></canvas>
+      <div class="hud-overlay">
+        <div class="legend-item"><span class="swatch" style="border:2px dashed #f59e0b; background:transparent;"></span> H = 1,50 m Linie</div>
+        <div class="legend-item"><span class="swatch" style="border:2px dotted #38bdf8; background:transparent;"></span> H = 2,00 m Linie</div>
+        <div class="legend-item"><span class="swatch" style="background:rgba(239,68,68,0.32); border:1px solid #ef4444;"></span> Sperrzone für gewähltes Möbel</div>
+        <div class="legend-item">🖱️ Ziehen = Verschieben | Mausrad = Zoom | Rechtsklick/Alt+Ziehen = Pan | Taste [R] = +45°</div>
+      </div>
+    </div>
+    <div class="pane pane-3d" id="pane3D" style="display:none;">
+      <div id="threeContainer" style="width:100%; height:100%;"></div>
+      <div class="hud-overlay">
+        <div>🧊 <b>3D-Inspektor:</b> Linksklick = Drehen | Rechtsklick = Verschieben | Mausrad = Zoomen</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CLOUD SYNC MODAL -->
+<div class="modal-backdrop" id="cloudModal">
+  <div class="modal">
+    <h3>☁️ Gemeinsames Bearbeiten (Weg 3: Cloud JSON Sync)</h3>
+    <p>
+      Hinterlege hier die URL einer kostenlosen Cloud-JSON-Datenbank (z.B. <b>Firebase Realtime Database</b> mit Endung <code>/wgplan.json</code> oder einen <b>JSONBin / npoint.io</b> Endpunkt). Alle Personen mit dieser URL können den aktuellen Stand per Klick laden und speichern.
+    </p>
+    <label>Cloud REST-Endpunkt URL (GET / PUT)
+      <input type="text" id="cloudUrlInput" placeholder="https://dein-projekt-default-rtdb.europe-west1.firebasedatabase.app/wgplan.json" />
+    </label>
+    <label>Optionaler API-Key / Bearer Token (falls benötigt)
+      <input type="text" id="cloudTokenInput" placeholder="Optional (leer lassen bei öffentlichem Link)" />
+    </label>
+    <div id="cloudStatusMsg" style="font-size:12px; color:var(--text-muted);"></div>
+    <div class="form-row" style="justify-content:flex-end; margin-top:6px;">
+      <button id="btnCloudPull">⬇️ Aus Cloud laden</button>
+      <button id="btnCloudPush" class="success">⬆️ In Cloud speichern</button>
+      <button id="btnCloseModal">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ============================================================================
+   1. GEOMETRIE-DEFINITION DER WOHNUNG (Alle Maße in cm aus dem Grundriss)
+   ============================================================================ */
+const ROOMS = {
+  wohnzimmer: {
+    id: 'wohnzimmer',
+    name: 'Wohnzimmer (37,84 m²)',
+    areaLabel: '37,84 m²',
+    offsetX: 0,
+    offsetY: 0,
+    width: 673,
+    depth: 798,
+    // Exaktes Polygon im Uhrzeigersinn (in lokalen Raumkoordinaten cm)
+    polygon: [
+      { x: 0, y: 0 },
+      { x: 673, y: 0 },
+      { x: 673, y: 370 },
+      { x: 447, y: 370 },
+      { x: 447, y: 412 },
+      { x: 424, y: 412 },
+      { x: 424, y: 798 },
+      { x: 0, y: 798 }
+    ],
+    // Dachschrägen (mit Gauben-Ausschnitten, in denen kein Schrägdach stört)
+    slopes: [
+      {
+        side: 'north', // y = 0
+        d150: 80,      // Bei 80 cm Wandabstand wird H = 150 cm erreicht
+        gauben: [
+          { start: 0, end: 189, name: 'Gaube (Wintergarten)', ceilingH: 235 },
+          { start: 413, end: 601, name: 'Gaube (Essbereich)', ceilingH: 235 }
+        ]
+      },
+      {
+        side: 'south', // y = 798 (nur im linken Flügel x <= 424)
+        xMin: 0, xMax: 424, wallY: 798,
+        d150: 80,
+        gauben: [
+          { start: 145, end: 331, name: 'Gaube Süd', ceilingH: 235 }
+        ]
+      }
+    ],
+    // Feste Einbauten / Kamine / Balken / Wintergarten
+    fixtures: [
+      {
+        id: 'wintergarten',
+        type: 'wintergarten',
+        name: 'Wintergarten (Glas + Podest)',
+        x: 0, y: 0, w: 189, d: 170, h: 235
+      },
+      {
+        id: 'balken_pfosten',
+        type: 'beam',
+        name: 'Holzbalken + Schrägstrebe',
+        x: 406, y: 0, w: 14, d: 170, h: 248,
+        postY: 163, postSize: 14
+      },
+      {
+        id: 'kamin_wohn',
+        type: 'pillar',
+        name: 'Kamin / Schacht (60×93)',
+        x: 185, y: 535, w: 60, d: 93, h: 248
+      },
+      {
+        id: 'schacht_flur1',
+        type: 'pillar',
+        name: 'Wandvorsprung (74×46)',
+        x: 447, y: 324, w: 74, d: 46, h: 248
+      },
+      {
+        id: 'schacht_flur2',
+        type: 'pillar',
+        name: 'Eckvorsprung (22×38)',
+        x: 651, y: 332, w: 22, d: 38, h: 248
+      }
+    ],
+    doors: [
+      // Tür 1: Vom Vorflur nach oben in den rechten Wohnzimmer-Flügel (links eingehängt)
+      { x: 540, y: 370, width: 86, wall: 'south', hinge: 'left', swing: 'in' },
+      // Tür 2: Vom Vorflur nach links ins Wohnzimmer (links eingehängt)
+      { x: 424, y: 430, width: 86, wall: 'east', hinge: 'left', swing: 'in' }
+    ]
+  },
+
+  zimmer2: {
+    id: 'zimmer2',
+    name: 'Zimmer Oben Mitte (12,39 m²)',
+    areaLabel: '12,39 m²',
+    offsetX: 685,
+    offsetY: 0,
+    width: 373,
+    depth: 372,
+    polygon: [
+      { x: 0, y: 0 },
+      { x: 373, y: 0 },
+      { x: 373, y: 372 },
+      { x: 0, y: 372 }
+    ],
+    slopes: [
+      {
+        side: 'north',
+        d150: 80,
+        gauben: [
+          { start: 110, end: 297, name: 'Gaube (1,87m)', ceilingH: 235 }
+        ]
+      }
+    ],
+    fixtures: [],
+    doors: [
+      // Unten links, links eingehängt (öffnet gegen die linke Wand)
+      { x: 14, y: 372, width: 86, wall: 'south', hinge: 'left', swing: 'in' }
+    ]
+  },
+
+  zimmer3: {
+    id: 'zimmer3',
+    name: 'Zimmer Oben Rechts (14,00 m²)',
+    areaLabel: '14,00 m²',
+    offsetX: 1070,
+    offsetY: 0,
+    width: 470, // 416 + 54
+    depth: 369,
+    polygon: [
+      { x: 0, y: 0 },
+      { x: 470, y: 0 },
+      { x: 470, y: 369 },
+      { x: 0, y: 369 }
+    ],
+    slopes: [
+      {
+        side: 'north',
+        d150: 80,
+        gauben: [
+          { start: 120, end: 307, name: 'Gaube Nord (1,87m)', ceilingH: 235 }
+        ]
+      },
+      {
+        side: 'east',
+        wallX: 470,
+        d150: 54,
+        gauben: [
+          { start: 202, end: 331, name: 'Gaube Ost (1,29m)', ceilingH: 235 }
+        ]
+      }
+    ],
+    fixtures: [
+      {
+        id: 'schacht_z3',
+        type: 'pillar',
+        name: 'Kamin / Schacht (56×38)',
+        x: 126, y: 331, w: 56, d: 38, h: 248
+      }
+    ],
+    doors: [
+      // Unten links neben dem 56cm Schacht, links eingehängt
+      { x: 22, y: 369, width: 86, wall: 'south', hinge: 'left', swing: 'in' }
+    ]
+  },
+
+  zimmer4: {
+    id: 'zimmer4',
+    name: 'Zimmer Unten Rechts (9,13 m²)',
+    areaLabel: '9,13 m²',
+    offsetX: 1227,
+    offsetY: 388,
+    width: 313, // 259 + 54
+    depth: 410, // 326 + 84
+    polygon: [
+      { x: 0, y: 0 },
+      { x: 313, y: 0 },
+      { x: 313, y: 410 },
+      { x: 0, y: 410 }
+    ],
+    slopes: [
+      {
+        side: 'south',
+        xMin: 0, xMax: 313, wallY: 410,
+        d150: 84,
+        gauben: []
+      },
+      {
+        side: 'east',
+        wallX: 313,
+        d150: 54,
+        gauben: [
+          { start: 20, end: 147, name: 'Gaube Ost (1,27m)', ceilingH: 235 }
+        ]
+      }
+    ],
+    fixtures: [],
+    doors: [
+      // Linke Wand ganz oben, rechts eingehängt (öffnet nach innen gegen die obere Wand)
+      { x: 0, y: 14, width: 86, wall: 'west', hinge: 'right', swing: 'in' }
+    ]
+  }
+};
+
+// Ausgegraute Nebenräume für die Gesamtübersicht
+const SECONDARY_ROOMS = [
+  { name: 'Vorflur', area: '2,64 m²', x: 436, y: 382, w: 249, d: 112 },
+  { name: 'Flur', area: '6,89 m²', x: 685, y: 382, w: 530, d: 130 },
+  { name: 'Treppenhaus', area: 'Treppe', x: 436, y: 504, w: 249, d: 294 },
+  { name: 'Küche', area: '6,12 m²', x: 685, y: 522, w: 252, d: 276 },
+  { name: 'Abst.', area: '0,28 m²', x: 947, y: 522, w: 58, d: 49 },
+  { name: 'Bad', area: '3,43 m²', x: 947, y: 581, w: 178, d: 217 },
+  { name: 'WC', area: '1,54 m²', x: 1135, y: 581, w: 80, d: 217 }
+];
+
+const PRESETS = [
+  { name: 'Bett 140×200', w: 140, d: 200, h: 85, color: '#3b82f6' },
+  { name: 'Bett 160×200', w: 160, d: 200, h: 85, color: '#2563eb' },
+  { name: 'Kleiderschrank', w: 100, d: 60, h: 200, color: '#8b5cf6' },
+  { name: 'PAX Hoch (236)', w: 100, d: 60, h: 236, color: '#7c3aed' },
+  { name: 'Schreibtisch', w: 160, d: 80, h: 75, color: '#10b981' },
+  { name: 'Esstisch', w: 160, d: 90, h: 76, color: '#d97706' },
+  { name: 'Sofa 3-Sitzer', w: 220, d: 95, h: 85, color: '#ec4899' },
+  { name: 'Kallax / Regal', w: 147, d: 39, h: 147, color: '#14b8a6' },
+  { name: 'Kommode / Lowboard', w: 160, d: 45, h: 80, color: '#f59e0b' },
+  { name: 'Bücherregal', w: 80, d: 30, h: 202, color: '#06b6d4' }
+];
+
+/* ============================================================================
+   2. APP STATE & PERSISTENZ
+   ============================================================================ */
+const STORAGE_KEY = 'wg_raumplaner_state_v1';
+
+let state = {
+  activeRoom: 'overview', // 'overview' | 'wohnzimmer' | 'zimmer2' | 'zimmer3' | 'zimmer4'
+  viewMode: '2d',         // '2d' | 'split' | '3d'
+  selectedId: null,
+  config: {
+    kneeNS: 60,           // Kniestockhöhe Nord/Süd in cm
+    kneeE: 90,            // Kniestockhöhe Ost in cm
+    ceilH: 248,           // Volle Raumhöhe in cm
+    buffer: 3,            // Sicherheitspuffer in cm
+    snap: true,
+    wintergartenLock: true
+  },
+  // Beispiel-Startmöbel zur direkten Demonstration
+  furniture: [
+    { id: 'f1', room: 'wohnzimmer', name: 'Esstisch (Gaube)', x: 445, y: 55, w: 140, d: 90, h: 76, rot: 0, color: '#d97706' },
+    { id: 'f2', room: 'wohnzimmer', name: 'Sofa', x: 40, y: 260, w: 220, d: 95, h: 85, rot: 0, color: '#ec4899' },
+    { id: 'f3', room: 'zimmer2', name: 'Bett 140×200', x: 210, y: 120, w: 140, d: 200, h: 85, rot: 0, color: '#3b82f6' },
+    { id: 'f4', room: 'zimmer3', name: 'Schreibtisch', x: 135, y: 20, w: 160, d: 80, h: 75, rot: 0, color: '#10b981' },
+    { id: 'f5', room: 'zimmer4', name: 'Kleiderschrank', x: 15, y: 120, w: 100, d: 60, h: 200, rot: 90, color: '#8b5cf6' }
+  ]
+};
+
+function saveLocal() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    config: state.config,
+    furniture: state.furniture
+  }));
+}
+
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed.config) Object.assign(state.config, parsed.config);
+    if (Array.isArray(parsed.furniture)) state.furniture = parsed.furniture;
+  } catch (e) {
+    console.warn('Konnte lokalen Speicherstand nicht laden:', e);
+  }
+}
+loadLocal();
+
+/* ============================================================================
+   3. MATHEMATIK: DACHSCHRÄGEN, HÖHEN & KOLLISIONS-LOGIK
+   ============================================================================ */
+
+/**
+ * Berechnet für eine Dachschräge die verfügbare Deckenhöhe an einem lokalen Punkt (x, y).
+ */
+function getSlopeHeightAt(room, slope, x, y, cfg) {
+  const Hmax = cfg.ceilH;
+
+  if (slope.side === 'north') {
+    const d = y; // Abstand von der oberen Außenwand (y = 0)
+    if (d < 0) return 0;
+    // Prüfen, ob Punkt (x,y) innerhalb einer Gaube liegt
+    for (const g of slope.gauben) {
+      if (x >= g.start && x <= g.end) return g.ceilingH || Hmax;
+    }
+    const h0 = cfg.kneeNS;
+    const slopeRate = (150 - h0) / slope.d150; // tan(alpha)
+    return Math.min(Hmax, h0 + d * slopeRate);
+  }
+
+  if (slope.side === 'south') {
+    if (x < (slope.xMin ?? 0) || x > (slope.xMax ?? room.width)) return Hmax;
+    const d = slope.wallY - y;
+    if (d < 0) return 0;
+    for (const g of slope.gauben) {
+      if (x >= g.start && x <= g.end) return g.ceilingH || Hmax;
+    }
+    const h0 = cfg.kneeNS;
+    const slopeRate = (150 - h0) / slope.d150;
+    return Math.min(Hmax, h0 + d * slopeRate);
+  }
+
+  if (slope.side === 'east') {
+    const d = slope.wallX - x;
+    if (d < 0) return 0;
+    for (const g of slope.gauben) {
+      if (y >= g.start && y <= g.end) return g.ceilingH || Hmax;
+    }
+    const h0 = cfg.kneeE;
+    const slopeRate = (150 - h0) / slope.d150;
+    return Math.min(Hmax, h0 + d * slopeRate);
+  }
+
+  return Hmax;
+}
+
+/**
+ * Berechnet den Wandabstand d (in cm), bei dem eine Dachschräge die Zielhöhe targetH erreicht.
+ */
+function getDistanceForHeight(slope, targetH, cfg) {
+  const h0 = slope.side === 'east' ? cfg.kneeE : cfg.kneeNS;
+  if (targetH <= h0) return 0;
+  const slopeRate = (150 - h0) / slope.d150;
+  return (targetH - h0) / slopeRate;
+}
+
+/**
+ * Berechnet die maximal verfügbare Höhe an einem Punkt (x, y) im Raum (inkl. Schrägstrebe im Wohnzimmer).
+ */
+function getRoomAvailableHeightAt(roomKey, x, y, cfg) {
+  const room = ROOMS[roomKey];
+  if (!room) return cfg.ceilH;
+  let minH = cfg.ceilH;
+
+  for (const slope of room.slopes) {
+    const h = getSlopeHeightAt(room, slope, x, y, cfg);
+    if (h < minH) minH = h;
+  }
+
+  // Spezialprüfung: Schrägstrebe + Pfosten im Wohnzimmer (x in [406..420], y in [0..170])
+  if (roomKey === 'wohnzimmer') {
+    if (x >= 406 && x <= 420 && y >= 0 && y <= 170) {
+      return 0; // Durch Bodenschwelle, Strebe und Pfosten blockiert
+    }
+  }
+  return minH;
+}
+
+/**
+ * Liefert die 4 gedrehten Eckpunkte sowie Kanten-Mittelpunkte eines Möbelstücks (in lokalen Raumkoordinaten).
+ */
+function getFurnitureCorners(item) {
+  const cx = item.x + item.w / 2;
+  const cy = item.y + item.d / 2;
+  const rad = (item.rot || 0) * Math.PI / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+
+  const localPts = [
+    { lx: -item.w / 2, ly: -item.d / 2, label: 'Nord-West' },
+    { lx:  item.w / 2, ly: -item.d / 2, label: 'Nord-Ost' },
+    { lx:  item.w / 2, ly:  item.d / 2, label: 'Süd-Ost' },
+    { lx: -item.w / 2, ly:  item.d / 2, label: 'Süd-West' },
+    { lx: 0,           ly: -item.d / 2, label: 'Nord-Kante' },
+    { lx:  item.w / 2, ly: 0,           label: 'Ost-Kante' },
+    { lx: 0,           ly:  item.d / 2, label: 'Süd-Kante' },
+    { lx: -item.w / 2, ly: 0,           label: 'West-Kante' }
+  ];
+
+  return localPts.map(p => ({
+    x: cx + p.lx * cos - p.ly * sin,
+    y: cy + p.lx * sin + p.ly * cos,
+    label: p.label
+  }));
+}
+
+/**
+ * Punkt-in-Polygon Test für Raumgrenzen
+ */
+function isPointInPolygon(pt, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+      (pt.x < (xj - xi) * (pt.y - yi) / ((yj - yi) || 1e-9) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Vollständige Kollisionsprüfung eines Möbelstücks (Dachschrägen, Wände, Kamine, Balken, Wintergarten)
+ */
+function evaluateFurnitureCollision(item, cfg = state.config) {
+  const room = ROOMS[item.room];
+  if (!room) return { status: 'ok', minClearance: 999, message: 'OK' };
+
+  const pts = getFurnitureCorners(item);
+  let minAvailH = cfg.ceilH;
+  let worstCorner = pts[0];
+  let outOfBounds = false;
+  let hitFixture = null;
+
+  for (const pt of pts) {
+    // 1. Raum-Polygon-Prüfung (mit 1 cm Toleranz)
+    if (!isPointInPolygon(pt, room.polygon)) {
+      outOfBounds = true;
+    }
+
+    // 2. Feste Einbauten (Kamine, Holzbalken, optional Wintergarten)
+    for (const fix of room.fixtures) {
+      if (fix.type === 'wintergarten' && !cfg.wintergartenLock) continue;
+      if (pt.x > fix.x + 1 && pt.x < fix.x + fix.w - 1 &&
+          pt.y > fix.y + 1 && pt.y < fix.y + fix.d - 1) {
+        hitFixture = fix.name;
+      }
+    }
+
+    // 3. Dachschrägen-Höhe
+    const availH = getRoomAvailableHeightAt(item.room, pt.x, pt.y, cfg);
+    if (availH < minAvailH) {
+      minAvailH = availH;
+      worstCorner = pt;
+    }
+  }
+
+  const clearance = Math.round(minAvailH - item.h);
+
+  if (hitFixture) {
+    return {
+      status: 'err',
+      minClearance: clearance,
+      message: `❌ Kollision mit festem Einbau: ${hitFixture}`
+    };
+  }
+  if (outOfBounds) {
+    return {
+      status: 'err',
+      minClearance: clearance,
+      message: `❌ Möbelstück ragt über eine Zimmerwand hinaus!`
+    };
+  }
+  if (clearance < 0) {
+    return {
+      status: 'err',
+      minClearance: clearance,
+      message: `❌ Dachschrägen-Kollision (${worstCorner.label}): Möbel ist ${Math.abs(clearance)} cm zu hoch! (Max. erlaubt dort: ${Math.round(minAvailH)} cm)`
+    };
+  }
+  if (clearance < cfg.buffer) {
+    return {
+      status: 'warn',
+      minClearance: clearance,
+      message: `⚠️ Knapp unter der Dachschräge (${worstCorner.label}): Nur ${clearance} cm Luft (Puffer: ${cfg.buffer} cm).`
+    };
+  }
+
+  return {
+    status: 'ok',
+    minClearance: clearance,
+    message: `✅ Passt! Niedrigste Stelle über Möbel: ${Math.round(minAvailH)} cm (+${clearance} cm Luft).`
+  };
+}
+
+/* ============================================================================
+   4. 2D CANVAS ENGINE (GRUNDRISS-EDITOR & GESAMTÜBERSICHT)
+   ============================================================================ */
+const canvas2D = document.getElementById('canvas2D');
+const ctx = canvas2D.getContext('2d');
+
+let cam2D = { x: 40, y: 40, zoom: 0.72 };
+let isDraggingItem = false;
+let isPanning2D = false;
+let dragOffset = { x: 0, y: 0 };
+let panStart = { x: 0, y: 0 };
+
+// Schraffur-Pattern für rote Sperrzonen erstellen
+function createHatchPattern() {
+  const pCanvas = document.createElement('canvas');
+  pCanvas.width = 14;
+  pCanvas.height = 14;
+  const pCtx = pCanvas.getContext('2d');
+  pCtx.fillStyle = 'rgba(239, 68, 68, 0.18)';
+  pCtx.fillRect(0, 0, 14, 14);
+  pCtx.strokeStyle = 'rgba(239, 68, 68, 0.65)';
+  pCtx.lineWidth = 2;
+  pCtx.beginPath();
+  pCtx.moveTo(0, 14);
+  pCtx.lineTo(14, 0);
+  pCtx.stroke();
+  return ctx.createPattern(pCanvas, 'repeat');
+}
+let hatchPattern = null;
+
+function fitCameraToActiveRoom() {
+  const rect = canvas2D.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+
+  let minX = 0, minY = 0, maxX = 1550, maxY = 810;
+  if (state.activeRoom !== 'overview') {
+    const r = ROOMS[state.activeRoom];
+    minX = r.offsetX;
+    minY = r.offsetY;
+    maxX = r.offsetX + r.width;
+    maxY = r.offsetY + r.depth;
+  }
+
+  const pad = 90;
+  const w = maxX - minX;
+  const h = maxY - minY;
+  const scaleX = (rect.width - pad * 2) / w;
+  const scaleY = (rect.height - pad * 2) / h;
+  cam2D.zoom = Math.max(0.25, Math.min(3.0, Math.min(scaleX, scaleY)));
+  cam2D.x = (rect.width - w * cam2D.zoom) / 2 - minX * cam2D.zoom;
+  cam2D.y = (rect.height - h * cam2D.zoom) / 2 - minY * cam2D.zoom;
+
+  fit3DCameraToActiveRoom();
+  renderAll();
+}
+
+function screenToWorld(sx, sy) {
+  return {
+    x: (sx - cam2D.x) / cam2D.zoom,
+    y: (sy - cam2D.y) / cam2D.zoom
+  };
+}
+
+function draw2D() {
+  const rect = canvas2D.getBoundingClientRect();
+  if (canvas2D.width !== rect.width || canvas2D.height !== rect.height) {
+    canvas2D.width = rect.width;
+    canvas2D.height = rect.height;
+  }
+  if (!hatchPattern) hatchPattern = createHatchPattern();
+
+  ctx.clearRect(0, 0, canvas2D.width, canvas2D.height);
+  ctx.save();
+  ctx.translate(cam2D.x, cam2D.y);
+  ctx.scale(cam2D.zoom, cam2D.zoom);
+
+  // 1. Ausgegraute Nebenräume (immer sichtbar, in Einzelansicht dezenter)
+  const secAlpha = state.activeRoom === 'overview' ? 0.85 : 0.25;
+  ctx.save();
+  ctx.globalAlpha = secAlpha;
+  for (const sr of SECONDARY_ROOMS) {
+    ctx.fillStyle = '#1e293b';
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 2;
+    ctx.fillRect(sr.x, sr.y, sr.w, sr.d);
+    ctx.strokeRect(sr.x, sr.y, sr.w, sr.d);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(sr.name, sr.x + sr.w / 2, sr.y + sr.d / 2 - 4);
+    ctx.font = '13px sans-serif';
+    ctx.fillText(sr.area, sr.x + sr.w / 2, sr.y + sr.d / 2 + 14);
+  }
+  ctx.restore();
+
+  // 2. Die 4 Hauptzimmer zeichnen
+  const selectedItem = state.furniture.find(f => f.id === state.selectedId);
+
+  for (const key of Object.keys(ROOMS)) {
+    const room = ROOMS[key];
+    const isActive = state.activeRoom === 'overview' || state.activeRoom === key;
+
+    ctx.save();
+    ctx.translate(room.offsetX, room.offsetY);
+    ctx.globalAlpha = isActive ? 1.0 : 0.22;
+
+    // Raumpolygon Pfad
+    ctx.beginPath();
+    room.polygon.forEach((pt, idx) => {
+      if (idx === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    });
+    ctx.closePath();
+
+    // Bodenfüllung
+    ctx.fillStyle = '#17253b';
+    ctx.fill();
+
+    // Clip auf Raumpolygon für Raster & Schrägen-Zonen
+    ctx.save();
+    ctx.clip();
+
+    // 10cm / 50cm Raster
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.08)';
+    ctx.lineWidth = 1;
+    for (let gx = 0; gx <= room.width; gx += 50) {
+      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, room.depth); ctx.stroke();
+    }
+    for (let gy = 0; gy <= room.depth; gy += 50) {
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(room.width, gy); ctx.stroke();
+    }
+
+    // DACHSCHRÄGEN-ZONEN & DYNAMISCHE SPERRZONE
+    for (const slope of room.slopes) {
+      const d150 = getDistanceForHeight(slope, 150, state.config);
+      const d200 = getDistanceForHeight(slope, 200, state.config);
+      const dMax = getDistanceForHeight(slope, state.config.ceilH, state.config);
+
+      // Schattierung der gesamten Dachschräge bis Deckenknick
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.09)';
+      drawSlopeBands(slope, room, dMax);
+
+      // DYNAMISCHE ROTE SPERRZONE, wenn im Raum ein Möbel ausgewählt ist
+      if (selectedItem && selectedItem.room === key) {
+        const reqH = selectedItem.h + state.config.buffer;
+        const dBlock = Math.min(dMax, getDistanceForHeight(slope, reqH, state.config));
+        if (dBlock > 0) {
+          ctx.fillStyle = hatchPattern;
+          drawSlopeBands(slope, room, dBlock, reqH);
+        }
+      }
+
+      // Höhenlinien H = 1,50 m (orange gestrichelt) und H = 2,00 m (blau gepunktet)
+      drawSlopeLine(slope, room, d150, '#f59e0b', [8, 6], 'h=1,50m');
+      drawSlopeLine(slope, room, d200, '#38bdf8', [3, 5], 'h=2,00m');
+
+      // Gauben-Beschriftung am Rand
+      for (const g of slope.gauben) {
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
+        if (slope.side === 'north') {
+          ctx.fillRect(g.start, 0, g.end - g.start, 80);
+          ctx.fillStyle = '#7dd3fc';
+          ctx.font = '11px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(g.name, (g.start + g.end) / 2, 16);
+        } else if (slope.side === 'south') {
+          ctx.fillRect(g.start, slope.wallY - 80, g.end - g.start, 80);
+          ctx.fillStyle = '#7dd3fc';
+          ctx.font = '11px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(g.name, (g.start + g.end) / 2, slope.wallY - 8);
+        } else if (slope.side === 'east') {
+          ctx.fillRect(slope.wallX - 54, g.start, 54, g.end - g.start);
+          ctx.save();
+          ctx.translate(slope.wallX - 10, (g.start + g.end) / 2);
+          ctx.rotate(-Math.PI / 2);
+          ctx.fillStyle = '#7dd3fc';
+          ctx.font = '11px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(g.name, 0, 0);
+          ctx.restore();
+        }
+      }
+    }
+
+    ctx.restore(); // Ende Clip
+
+    // FESTE EINBAUTEN (Wintergarten, Holzbalken, Kamine)
+    for (const fix of room.fixtures) {
+      if (fix.type === 'wintergarten') {
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.18)';
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 3;
+        ctx.fillRect(fix.x, fix.y, fix.w, fix.d);
+        ctx.strokeRect(fix.x, fix.y, fix.w, fix.d);
+        ctx.fillStyle = '#bae6fd';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('🌿 Wintergarten (Glas)', fix.x + fix.w / 2, fix.y + fix.d / 2 - 6);
+        ctx.font = '11px sans-serif';
+        ctx.fillText('189 × 170 cm', fix.x + fix.w / 2, fix.y + fix.d / 2 + 12);
+      } else if (fix.type === 'beam') {
+        // Schrägstrebe + Bodenschwelle
+        ctx.fillStyle = 'rgba(180, 83, 9, 0.45)';
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2;
+        ctx.fillRect(fix.x, fix.y, fix.w, fix.d);
+        ctx.strokeRect(fix.x, fix.y, fix.w, fix.d);
+        // Senkrechter Holzpfosten
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(fix.x, fix.postY, fix.postSize, fix.postSize);
+        ctx.strokeRect(fix.x, fix.postY, fix.postSize, fix.postSize);
+      } else {
+        // Kamin / Wandvorsprung
+        ctx.fillStyle = '#334155';
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 2;
+        ctx.fillRect(fix.x, fix.y, fix.w, fix.d);
+        ctx.strokeRect(fix.x, fix.y, fix.w, fix.d);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(fix.name, fix.x + fix.w / 2, fix.y + fix.d / 2 + 3);
+      }
+    }
+
+    // Raum-Außenwände nachzeichnen
+    ctx.beginPath();
+    room.polygon.forEach((pt, idx) => {
+      if (idx === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    });
+    ctx.closePath();
+    ctx.strokeStyle = state.activeRoom === key ? '#60a5fa' : '#cbd5e1';
+    ctx.lineWidth = state.activeRoom === key ? 5 : 3.5;
+    ctx.stroke();
+
+    // TÜREN & SCHWENKRADIEN
+    for (const d of room.doors) {
+      drawDoor2D(d);
+    }
+
+    // Raumname & Quadratmeter-Wasserzeichen
+    ctx.fillStyle = 'rgba(248, 250, 252, 0.22)';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    const labelX = key === 'wohnzimmer' ? 210 : room.width / 2;
+    const labelY = key === 'wohnzimmer' ? 430 : room.depth / 2;
+    ctx.fillText(room.areaLabel, labelX, labelY);
+
+    // Wandmaße außen/innen dezent anzeigen
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(`${(room.width / 100).toFixed(2)} m`, room.width / 2, -8);
+    ctx.save();
+    ctx.translate(-10, room.depth / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(`${(room.depth / 100).toFixed(2)} m`, 0, 0);
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  // 3. MÖBELSTÜCKE ZEICHNEN
+  for (const item of state.furniture) {
+    const room = ROOMS[item.room];
+    if (!room) continue;
+    const isRoomVisible = state.activeRoom === 'overview' || state.activeRoom === item.room;
+
+    const evalRes = evaluateFurnitureCollision(item, state.config);
+    const isSelected = item.id === state.selectedId;
+
+    ctx.save();
+    ctx.globalAlpha = isRoomVisible ? 1.0 : 0.2;
+    const cx = room.offsetX + item.x + item.w / 2;
+    const cy = room.offsetY + item.y + item.d / 2;
+    ctx.translate(cx, cy);
+    ctx.rotate((item.rot || 0) * Math.PI / 180);
+
+    // Hintergrundfarbe (oder Rot bei Kollision)
+    ctx.fillStyle = evalRes.status === 'err'
+      ? 'rgba(239, 68, 68, 0.78)'
+      : evalRes.status === 'warn'
+        ? 'rgba(245, 158, 11, 0.78)'
+        : item.color + 'cc';
+
+    ctx.fillRect(-item.w / 2, -item.d / 2, item.w, item.d);
+
+    // Rahmen
+    ctx.lineWidth = isSelected ? 3.5 : 1.8;
+    ctx.strokeStyle = isSelected ? '#ffffff' : (evalRes.status === 'err' ? '#fca5a5' : '#0f172a');
+    ctx.strokeRect(-item.w / 2, -item.d / 2, item.w, item.d);
+
+    // Vorderseiten-Markierung (kleine Linie an der Vorderkante unten)
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-item.w / 4, item.d / 2 - 4);
+    ctx.lineTo(item.w / 4, item.d / 2 - 4);
+    ctx.stroke();
+
+    // Beschriftung (Name + L×B×H)
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(item.name, 0, -3);
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillText(`${item.w}×${item.d} (H:${item.h})`, 0, 11);
+
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Hilfsfunktion: Zeichnet die Dachschrägen-Streifen unter Aussparung der Gauben
+ */
+function drawSlopeBands(slope, room, depthCm, reqHeight = 999) {
+  if (depthCm <= 0) return;
+
+  // Segmente ohne Gauben bestimmen
+  const getSegments = (totalLen, gauben) => {
+    let segs = [];
+    let cursor = 0;
+    const sorted = [...gauben].sort((a, b) => a.start - b.start);
+    for (const g of sorted) {
+      if (g.start > cursor) segs.push([cursor, g.start]);
+      // Falls Möbel sogar höher als die Gaubendecke (235 cm) ist, auch Gaube schraffieren
+      if (reqHeight > (g.ceilingH || 235)) {
+        segs.push([g.start, g.end]);
+      }
+      cursor = Math.max(cursor, g.end);
+    }
+    if (cursor < totalLen) segs.push([cursor, totalLen]);
+    return segs;
+  };
+
+  if (slope.side === 'north') {
+    const segs = getSegments(room.width, slope.gauben);
+    for (const [s, e] of segs) {
+      ctx.fillRect(s, 0, e - s, depthCm);
+    }
+  } else if (slope.side === 'south') {
+    const xMin = slope.xMin ?? 0;
+    const xMax = slope.xMax ?? room.width;
+    const segs = getSegments(xMax, slope.gauben);
+    for (const [s, e] of segs) {
+      const start = Math.max(xMin, s);
+      const end = Math.min(xMax, e);
+      if (end > start) {
+        ctx.fillRect(start, slope.wallY - depthCm, end - start, depthCm);
+      }
+    }
+  } else if (slope.side === 'east') {
+    const segs = getSegments(room.depth, slope.gauben);
+    for (const [s, e] of segs) {
+      ctx.fillRect(slope.wallX - depthCm, s, depthCm, e - s);
+    }
+  }
+}
+
+function drawSlopeLine(slope, room, d, color, dash, label) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.setLineDash(dash);
+  ctx.beginPath();
+  if (slope.side === 'north') {
+    ctx.moveTo(0, d);
+    ctx.lineTo(room.width, d);
+  } else if (slope.side === 'south') {
+    ctx.moveTo(slope.xMin ?? 0, slope.wallY - d);
+    ctx.lineTo(slope.xMax ?? room.width, slope.wallY - d);
+  } else if (slope.side === 'east') {
+    ctx.moveTo(slope.wallX - d, 0);
+    ctx.lineTo(slope.wallX - d, room.depth);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawDoor2D(d) {
+  ctx.save();
+  // Wandlücke übermalen
+  ctx.strokeStyle = '#17253b';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  if (d.wall === 'south') {
+    ctx.moveTo(d.x, d.y);
+    ctx.lineTo(d.x + d.width, d.y);
+  } else if (d.wall === 'east') {
+    ctx.moveTo(d.x, d.y);
+    ctx.lineTo(d.x, d.y + d.width);
+  } else if (d.wall === 'west') {
+    ctx.moveTo(d.x, d.y);
+    ctx.lineTo(d.x, d.y + d.width);
+  }
+  ctx.stroke();
+
+  // Türblatt + Viertelkreis-Schwenkbogen
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.fillStyle = 'rgba(203, 213, 225, 0.12)';
+  ctx.lineWidth = 2;
+
+  if (d.wall === 'south' && d.hinge === 'left') {
+    // Scharnier links bei (d.x, d.y), schwingt nach oben (-y) in den Raum
+    ctx.beginPath();
+    ctx.moveTo(d.x, d.y);
+    ctx.lineTo(d.x, d.y - d.width);
+    ctx.arc(d.x, d.y, d.width, -Math.PI / 2, 0, false);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (d.wall === 'east' && d.hinge === 'left') {
+    // Blick vom Vorflur nach links ins Wohnzimmer: Scharnier unten bei (d.x, d.y + d.width)
+    const hx = d.x, hy = d.y + d.width;
+    ctx.beginPath();
+    ctx.moveTo(hx, hy);
+    ctx.lineTo(hx - d.width, hy);
+    ctx.arc(hx, hy, d.width, Math.PI, 1.5 * Math.PI, false);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (d.wall === 'west' && d.hinge === 'right') {
+    // 9,13 m² Zimmer: Scharnier oben bei (d.x, d.y), schwingt nach innen (+x) gegen die obere Wand
+    ctx.beginPath();
+    ctx.moveTo(d.x, d.y);
+    ctx.lineTo(d.x + d.width, d.y);
+    ctx.arc(d.x, d.y, d.width, 0, Math.PI / 2, false);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ============================================================================
+   5. 3D ENGINE (THREE.JS SCENE)
+   ============================================================================ */
+const threeContainer = document.getElementById('threeContainer');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1120);
+
+const camera3D = new THREE.PerspectiveCamera(45, 1, 1, 10000);
+camera3D.position.set(750, 950, 1200);
+
+const renderer3D = new THREE.WebGLRenderer({ antialias: true });
+renderer3D.shadowMap.enabled = true;
+threeContainer.appendChild(renderer3D.domElement);
+
+const controls3D = new OrbitControls(camera3D, renderer3D.domElement);
+controls3D.enableDamping = true;
+controls3D.target.set(750, 0, 400);
+
+// Licht
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+dirLight.position.set(600, 1400, 900);
+scene.add(dirLight);
+
+const worldGroup3D = new THREE.Group();
+scene.add(worldGroup3D);
+
+function rebuild3DScene() {
+  while (worldGroup3D.children.length > 0) {
+    worldGroup3D.remove(worldGroup3D.children[0]);
+  }
+
+  const Hmax = state.config.ceilH;
+
+  // Nebenräume als flache dunkle Sockel in der Übersicht
+  if (state.activeRoom === 'overview') {
+    for (const sr of SECONDARY_ROOMS) {
+      const geo = new THREE.BoxGeometry(sr.w, 12, sr.d);
+      const mat = new THREE.MeshLambertMaterial({ color: 0x1e293b, transparent: true, opacity: 0.6 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(sr.x + sr.w / 2, -6, sr.y + sr.d / 2);
+      worldGroup3D.add(mesh);
+    }
+  }
+
+  // Hauptzimmer aufbauen
+  for (const key of Object.keys(ROOMS)) {
+    if (state.activeRoom !== 'overview' && state.activeRoom !== key) continue;
+    const room = ROOMS[key];
+    const rGroup = new THREE.Group();
+    rGroup.position.set(room.offsetX, 0, room.offsetY);
+
+    // 1. Holzboden aus Raum-Polygon
+    const shape = new THREE.Shape();
+    room.polygon.forEach((pt, idx) => {
+      if (idx === 0) shape.moveTo(pt.x, pt.y);
+      else shape.lineTo(pt.x, pt.y);
+    });
+    const floorGeo = new THREE.ShapeGeometry(shape);
+    floorGeo.rotateX(Math.PI / 2);
+    const floorMat = new THREE.MeshLambertMaterial({ color: 0x855836, side: THREE.DoubleSide });
+    const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+    rGroup.add(floorMesh);
+
+    // 2. Außen-/Trennwände (halbtransparent für freie Sicht ins Zimmer)
+    const wallMat = new THREE.MeshLambertMaterial({
+      color: 0xe2e8f0,
+      transparent: true,
+      opacity: 0.28,
+      side: THREE.DoubleSide
+    });
+
+    for (let i = 0; i < room.polygon.length; i++) {
+      const p1 = room.polygon[i];
+      const p2 = room.polygon[(i + 1) % room.polygon.length];
+      const segLen = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+
+      // Wandhöhe an Kniestöcken niedriger, an Innenwänden volle Höhe
+      let wallH = Hmax;
+      if (p1.y === 0 && p2.y === 0) wallH = state.config.kneeNS;
+      if (p1.y === room.depth && p2.y === room.depth && room.slopes.some(s => s.side === 'south')) {
+        wallH = state.config.kneeNS;
+      }
+      if (p1.x === room.width && p2.x === room.width && room.slopes.some(s => s.side === 'east')) {
+        wallH = state.config.kneeE;
+      }
+
+      const wGeo = new THREE.PlaneGeometry(segLen, wallH);
+      const wMesh = new THREE.Mesh(wGeo, wallMat);
+      wMesh.position.set((p1.x + p2.x) / 2, wallH / 2, (p1.y + p2.y) / 2);
+      wMesh.rotation.y = -Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      rGroup.add(wMesh);
+    }
+
+    // 3. Dachschrägen als geneigte, halbtransparente 3D-Flächen (mit Aussparung der Gauben)
+    const roofMat = new THREE.MeshLambertMaterial({
+      color: 0x94a3b8,
+      transparent: true,
+      opacity: 0.38,
+      side: THREE.DoubleSide
+    });
+    const gaubeMat = new THREE.MeshLambertMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.22,
+      side: THREE.DoubleSide
+    });
+
+    for (const slope of room.slopes) {
+      const h0 = slope.side === 'east' ? state.config.kneeE : state.config.kneeNS;
+      const dMax = getDistanceForHeight(slope, Hmax, state.config);
+      const slopeLen = Math.hypot(dMax, Hmax - h0);
+      const tiltAngle = Math.atan2(Hmax - h0, dMax);
+
+      // Hilfsfunktion für Segmente ohne Gauben
+      const totalSpan = slope.side === 'east' ? room.depth : (slope.xMax ?? room.width);
+      let cursor = slope.xMin ?? 0;
+      const sortedG = [...slope.gauben].sort((a, b) => a.start - b.start);
+      const segments = [];
+      for (const g of sortedG) {
+        if (g.start > cursor) segments.push({ s: cursor, e: g.start, isGaube: false });
+        segments.push({ s: g.start, e: g.end, isGaube: true, ceilingH: g.ceilingH || 235 });
+        cursor = g.end;
+      }
+      if (cursor < totalSpan) segments.push({ s: cursor, e: totalSpan, isGaube: false });
+
+      for (const seg of segments) {
+        const spanW = seg.e - seg.s;
+        if (spanW <= 0) continue;
+
+        if (!seg.isGaube) {
+          const planeGeo = new THREE.PlaneGeometry(spanW, slopeLen);
+          const plane = new THREE.Mesh(planeGeo, roofMat);
+
+          if (slope.side === 'north') {
+            plane.position.set(seg.s + spanW / 2, (h0 + Hmax) / 2, dMax / 2);
+            plane.rotation.x = Math.PI / 2 - tiltAngle;
+          } else if (slope.side === 'south') {
+            plane.position.set(seg.s + spanW / 2, (h0 + Hmax) / 2, slope.wallY - dMax / 2);
+            plane.rotation.x = -Math.PI / 2 + tiltAngle;
+          } else if (slope.side === 'east') {
+            plane.rotation.order = 'YXZ';
+            plane.rotation.y = Math.PI / 2;
+            plane.rotation.x = Math.PI / 2 - tiltAngle;
+            plane.position.set(slope.wallX - dMax / 2, (h0 + Hmax) / 2, seg.s + spanW / 2);
+          }
+          rGroup.add(plane);
+        } else {
+          // Gauben-Decke (flach auf 235 cm)
+          const gDepth = slope.side === 'east' ? 54 : 80;
+          const gGeo = new THREE.BoxGeometry(
+            slope.side === 'east' ? gDepth : spanW,
+            4,
+            slope.side === 'east' ? spanW : gDepth
+          );
+          const gMesh = new THREE.Mesh(gGeo, gaubeMat);
+          if (slope.side === 'north') {
+            gMesh.position.set(seg.s + spanW / 2, seg.ceilingH, gDepth / 2);
+          } else if (slope.side === 'south') {
+            gMesh.position.set(seg.s + spanW / 2, seg.ceilingH, slope.wallY - gDepth / 2);
+          } else if (slope.side === 'east') {
+            gMesh.position.set(slope.wallX - gDepth / 2, seg.ceilingH, seg.s + spanW / 2);
+          }
+          rGroup.add(gMesh);
+        }
+      }
+    }
+
+    // 4. Feste Einbauten in 3D (Wintergarten, Holzbalken + Strebe, Kamine)
+    for (const fix of room.fixtures) {
+      if (fix.type === 'wintergarten') {
+        // Verglaster Kasten + Podestbett
+        const glassGeo = new THREE.BoxGeometry(fix.w, fix.h, fix.d);
+        const glassMat = new THREE.MeshLambertMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.25 });
+        const glassBox = new THREE.Mesh(glassGeo, glassMat);
+        glassBox.position.set(fix.x + fix.w / 2, fix.h / 2, fix.y + fix.d / 2);
+        rGroup.add(glassBox);
+
+        const edges = new THREE.EdgesGeometry(glassGeo);
+        const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xe0f2fe }));
+        line.position.copy(glassBox.position);
+        rGroup.add(line);
+
+        // Eingebautes Podest/Bett im Wintergarten (ca. 85 cm hoch)
+        const bedGeo = new THREE.BoxGeometry(fix.w - 6, 80, 95);
+        const bedMat = new THREE.MeshLambertMaterial({ color: 0xfef3c7 });
+        const bedMesh = new THREE.Mesh(bedGeo, bedMat);
+        bedMesh.position.set(fix.x + fix.w / 2, 40, fix.y + 48);
+        rGroup.add(bedMesh);
+      } else if (fix.type === 'beam') {
+        const woodMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
+        // Senkrechter Pfosten
+        const postGeo = new THREE.BoxGeometry(14, Hmax, 14);
+        const postMesh = new THREE.Mesh(postGeo, woodMat);
+        postMesh.position.set(fix.x + 7, Hmax / 2, fix.postY + 7);
+        rGroup.add(postMesh);
+
+        // Bodenschwelle
+        const sillGeo = new THREE.BoxGeometry(12, 8, fix.d);
+        const sillMesh = new THREE.Mesh(sillGeo, woodMat);
+        sillMesh.position.set(fix.x + 7, 4, fix.d / 2);
+        rGroup.add(sillMesh);
+
+        // Schräge Holzstrebe (Kopfband) vom Kniestock zum oberen Pfostenende
+        const hStart = state.config.kneeNS;
+        const braceLen = Math.hypot(fix.postY, Hmax - hStart);
+        const braceGeo = new THREE.BoxGeometry(12, 14, braceLen);
+        const braceMesh = new THREE.Mesh(braceGeo, woodMat);
+        braceMesh.position.set(fix.x + 7, (hStart + Hmax) / 2, fix.postY / 2);
+        braceMesh.rotation.x = -Math.atan2(Hmax - hStart, fix.postY);
+        rGroup.add(braceMesh);
+      } else {
+        // Kamin / Schacht
+        const pGeo = new THREE.BoxGeometry(fix.w, Hmax, fix.d);
+        const pMat = new THREE.MeshLambertMaterial({ color: 0x475569 });
+        const pMesh = new THREE.Mesh(pGeo, pMat);
+        pMesh.position.set(fix.x + fix.w / 2, Hmax / 2, fix.y + fix.d / 2);
+        rGroup.add(pMesh);
+      }
+    }
+
+    worldGroup3D.add(rGroup);
+  }
+
+  // 5. Möbelstücke in 3D einfügen
+  for (const item of state.furniture) {
+    if (state.activeRoom !== 'overview' && state.activeRoom !== item.room) continue;
+    const room = ROOMS[item.room];
+    if (!room) continue;
+
+    const evalRes = evaluateFurnitureCollision(item, state.config);
+    const isSelected = item.id === state.selectedId;
+
+    const boxGeo = new THREE.BoxGeometry(item.w, item.h, item.d);
+    const boxColor = evalRes.status === 'err'
+      ? 0xef4444
+      : evalRes.status === 'warn'
+        ? 0xf59e0b
+        : new THREE.Color(item.color);
+
+    const boxMat = new THREE.MeshLambertMaterial({ color: boxColor });
+    const mesh = new THREE.Mesh(boxGeo, boxMat);
+
+    const cx = room.offsetX + item.x + item.w / 2;
+    const cz = room.offsetY + item.y + item.d / 2;
+    mesh.position.set(cx, item.h / 2, cz);
+    mesh.rotation.y = -(item.rot || 0) * Math.PI / 180;
+
+    // Kanten-Umriss
+    const edges = new THREE.EdgesGeometry(boxGeo);
+    const lineMat = new THREE.LineBasicMaterial({
+      color: isSelected ? 0xffffff : 0x0f172a
+    });
+    const wireframe = new THREE.LineSegments(edges, lineMat);
+    mesh.add(wireframe);
+
+    worldGroup3D.add(mesh);
+  }
+}
+
+function fit3DCameraToActiveRoom() {
+  if (state.activeRoom === 'overview') {
+    controls3D.target.set(770, 80, 400);
+    camera3D.position.set(770, 1150, 1350);
+  } else {
+    const r = ROOMS[state.activeRoom];
+    const tx = r.offsetX + r.width / 2;
+    const tz = r.offsetY + r.depth / 2;
+    controls3D.target.set(tx, 90, tz);
+    camera3D.position.set(tx + 180, 580, tz + Math.max(r.width, r.depth) * 1.15);
+  }
+  controls3D.update();
+}
+
+function animate3D() {
+  requestAnimationFrame(animate3D);
+  if (state.viewMode !== '2d') {
+    const rect = threeContainer.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      if (renderer3D.domElement.width !== rect.width || renderer3D.domElement.height !== rect.height) {
+        renderer3D.setSize(rect.width, rect.height, false);
+        camera3D.aspect = rect.width / rect.height;
+        camera3D.updateProjectionMatrix();
+      }
+      controls3D.update();
+      renderer3D.render(scene, camera3D);
+    }
+  }
+}
+animate3D();
+
+/* ============================================================================
+   6. INTERAKTION & UI EVENTS
+   ============================================================================ */
+function renderAll() {
+  draw2D();
+  rebuild3DScene();
+  updateInspectorUI();
+  saveLocal();
+}
+
+// Schnell-Vorlagen initialisieren
+const presetGrid = document.getElementById('presetGrid');
+PRESETS.forEach(p => {
+  const btn = document.createElement('button');
+  btn.className = 'preset-btn';
+  btn.innerHTML = `<strong>${p.name}</strong><small>${p.w}×${p.d} cm | H: ${p.h} cm</small>`;
+  btn.addEventListener('click', () => addFurnitureItem(p.name, p.w, p.d, p.h, p.color));
+  presetGrid.appendChild(btn);
+});
+
+function addFurnitureItem(name, w, d, h, color) {
+  const targetRoom = state.activeRoom === 'overview' ? 'wohnzimmer' : state.activeRoom;
+  const room = ROOMS[targetRoom];
+  const newItem = {
+    id: 'm_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    room: targetRoom,
+    name,
+    w: Number(w),
+    d: Number(d),
+    h: Number(h),
+    x: Math.round((room.width - w) / 2),
+    y: Math.round((room.depth - d) / 2),
+    rot: 0,
+    color
+  };
+  state.furniture.push(newItem);
+  state.selectedId = newItem.id;
+  renderAll();
+}
+
+document.getElementById('btnAddCustom').addEventListener('click', () => {
+  const name = document.getElementById('newName').value.trim() || 'Möbelstück';
+  const w = Number(document.getElementById('newW').value) || 100;
+  const d = Number(document.getElementById('newD').value) || 60;
+  const h = Number(document.getElementById('newH').value) || 200;
+  const color = document.getElementById('newColor').value;
+  addFurnitureItem(name, w, d, h, color);
+});
+
+// Inspector UI Synchronisation
+function updateInspectorUI() {
+  const item = state.furniture.find(f => f.id === state.selectedId);
+  const noSel = document.getElementById('noSelectionMsg');
+  const ctrls = document.getElementById('selectionControls');
+  const badge = document.getElementById('selRoomBadge');
+
+  if (!item) {
+    noSel.style.display = 'block';
+    ctrls.style.display = 'none';
+    badge.textContent = '';
+    return;
+  }
+
+  noSel.style.display = 'none';
+  ctrls.style.display = 'flex';
+  badge.textContent = ROOMS[item.room]?.name || item.room;
+
+  document.getElementById('selName').value = item.name;
+  document.getElementById('selColor').value = item.color;
+  document.getElementById('selW').value = item.w;
+  document.getElementById('selD').value = item.d;
+  document.getElementById('selH').value = item.h;
+  document.getElementById('selX').value = Math.round(item.x);
+  document.getElementById('selY').value = Math.round(item.y);
+  document.getElementById('selRot').value = item.rot || 0;
+
+  const evalRes = evaluateFurnitureCollision(item, state.config);
+  const banner = document.getElementById('collisionBanner');
+  banner.className = `status-banner status-${evalRes.status}`;
+  banner.textContent = evalRes.message;
+}
+
+['selName', 'selColor', 'selW', 'selD', 'selH', 'selX', 'selY', 'selRot'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    const item = state.furniture.find(f => f.id === state.selectedId);
+    if (!item) return;
+    item.name = document.getElementById('selName').value;
+    item.color = document.getElementById('selColor').value;
+    item.w = Math.max(10, Number(document.getElementById('selW').value) || 10);
+    item.d = Math.max(10, Number(document.getElementById('selD').value) || 10);
+    item.h = Math.max(10, Number(document.getElementById('selH').value) || 10);
+    item.x = Number(document.getElementById('selX').value) || 0;
+    item.y = Number(document.getElementById('selY').value) || 0;
+    item.rot = ((Number(document.getElementById('selRot').value) || 0) % 360 + 360) % 360;
+    renderAll();
+  });
+});
+
+document.getElementById('btnRotLeft').addEventListener('click', () => {
+  const item = state.furniture.find(f => f.id === state.selectedId);
+  if (!item) return;
+  item.rot = ((item.rot || 0) - 45 + 360) % 360;
+  renderAll();
+});
+
+document.getElementById('btnRot90').addEventListener('click', () => {
+  const item = state.furniture.find(f => f.id === state.selectedId);
+  if (!item) return;
+  item.rot = ((item.rot || 0) + 90) % 360;
+  renderAll();
+});
+
+document.getElementById('btnDuplicate').addEventListener('click', () => {
+  const item = state.furniture.find(f => f.id === state.selectedId);
+  if (!item) return;
+  const copy = { ...item, id: 'm_' + Date.now(), x: item.x + 25, y: item.y + 25 };
+  state.furniture.push(copy);
+  state.selectedId = copy.id;
+  renderAll();
+});
+
+document.getElementById('btnDelete').addEventListener('click', () => {
+  if (!state.selectedId) return;
+  state.furniture = state.furniture.filter(f => f.id !== state.selectedId);
+  state.selectedId = null;
+  renderAll();
+});
+
+// Dachschrägen-Konfiguration
+['cfgKneeNS', 'cfgKneeE', 'cfgCeilH', 'cfgBuffer', 'chkSnap', 'chkWintergartenLock'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    state.config.kneeNS = Number(document.getElementById('cfgKneeNS').value) || 60;
+    state.config.kneeE = Number(document.getElementById('cfgKneeE').value) || 90;
+    state.config.ceilH = Number(document.getElementById('cfgCeilH').value) || 248;
+    state.config.buffer = Number(document.getElementById('cfgBuffer').value) || 0;
+    state.config.snap = document.getElementById('chkSnap').checked;
+    state.config.wintergartenLock = document.getElementById('chkWintergartenLock').checked;
+    document.getElementById('lblBuffer').textContent = `${state.config.buffer} cm`;
+    renderAll();
+  });
+});
+
+// Maus-Interaktion auf dem 2D-Canvas
+function hitTestFurniture(wx, wy) {
+  for (let i = state.furniture.length - 1; i >= 0; i--) {
+    const item = state.furniture[i];
+    if (state.activeRoom !== 'overview' && state.activeRoom !== item.room) continue;
+    const room = ROOMS[item.room];
+    const cx = room.offsetX + item.x + item.w / 2;
+    const cy = room.offsetY + item.y + item.d / 2;
+    const rad = -(item.rot || 0) * Math.PI / 180;
+    const dx = wx - cx;
+    const dy = wy - cy;
+    const lx = dx * Math.cos(rad) - dy * Math.sin(rad);
+    const ly = dx * Math.sin(rad) + dy * Math.cos(rad);
+    if (Math.abs(lx) <= item.w / 2 && Math.abs(ly) <= item.d / 2) {
+      return item;
+    }
+  }
+  return null;
+}
+
+canvas2D.addEventListener('mousedown', e => {
+  const rect = canvas2D.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+  const world = screenToWorld(sx, sy);
+
+  // Rechtsklick, Mittelklick oder Alt-Taste -> Kamera pannen
+  if (e.button === 2 || e.button === 1 || e.altKey) {
+    isPanning2D = true;
+    panStart = { x: e.clientX - cam2D.x, y: e.clientY - cam2D.y };
+    return;
+  }
+
+  const hit = hitTestFurniture(world.x, world.y);
+  if (hit) {
+    state.selectedId = hit.id;
+    isDraggingItem = true;
+    const room = ROOMS[hit.room];
+    dragOffset = {
+      x: world.x - (room.offsetX + hit.x),
+      y: world.y - (room.offsetY + hit.y)
+    };
+    renderAll();
+    return;
+  }
+
+  // Falls in der Gesamtübersicht auf einen Raum geklickt wird -> Auswahl aufheben oder per Doppelklick reinzoomen
+  state.selectedId = null;
+  isPanning2D = true;
+  panStart = { x: e.clientX - cam2D.x, y: e.clientY - cam2D.y };
+  renderAll();
+});
+
+canvas2D.addEventListener('dblclick', e => {
+  if (state.activeRoom !== 'overview') return;
+  const rect = canvas2D.getBoundingClientRect();
+  const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+  for (const key of Object.keys(ROOMS)) {
+    const r = ROOMS[key];
+    const localPt = { x: world.x - r.offsetX, y: world.y - r.offsetY };
+    if (isPointInPolygon(localPt, r.polygon)) {
+      setActiveRoom(key);
+      break;
+    }
+  }
+});
+
+window.addEventListener('mousemove', e => {
+  if (isPanning2D) {
+    cam2D.x = e.clientX - panStart.x;
+    cam2D.y = e.clientY - panStart.y;
+    draw2D();
+    return;
+  }
+  if (isDraggingItem && state.selectedId) {
+    const item = state.furniture.find(f => f.id === state.selectedId);
+    if (!item) return;
+    const room = ROOMS[item.room];
+    const rect = canvas2D.getBoundingClientRect();
+    const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+
+    let nx = world.x - room.offsetX - dragOffset.x;
+    let ny = world.y - room.offsetY - dragOffset.y;
+
+    if (state.config.snap) {
+      // 5cm Raster-Snapping + direktes Wand-Snapping bei < 8cm Abstand
+      nx = Math.round(nx / 5) * 5;
+      ny = Math.round(ny / 5) * 5;
+      if (Math.abs(nx) < 8) nx = 0;
+      if (Math.abs(ny) < 8) ny = 0;
+      if (Math.abs(nx + item.w - room.width) < 8) nx = room.width - item.w;
+      if (Math.abs(ny + item.d - room.depth) < 8) ny = room.depth - item.d;
+    }
+
+    item.x = nx;
+    item.y = ny;
+    renderAll();
+  }
+});
+
+window.addEventListener('mouseup', () => {
+  isDraggingItem = false;
+  isPanning2D = false;
+});
+
+canvas2D.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas2D.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = canvas2D.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const worldBefore = screenToWorld(mx, my);
+
+  const factor = e.deltaY < 0 ? 1.12 : 0.89;
+  cam2D.zoom = Math.max(0.2, Math.min(4.0, cam2D.zoom * factor));
+
+  cam2D.x = mx - worldBefore.x * cam2D.zoom;
+  cam2D.y = my - worldBefore.y * cam2D.zoom;
+  draw2D();
+}, { passive: false });
+
+// Tastatur-Shortcuts (R = Drehen, Entf = Löschen)
+window.addEventListener('keydown', e => {
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+  if (!state.selectedId) return;
+  const item = state.furniture.find(f => f.id === state.selectedId);
+  if (!item) return;
+
+  if (e.key === 'r' || e.key === 'R') {
+    item.rot = ((item.rot || 0) + 45) % 360;
+    renderAll();
+  } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    state.furniture = state.furniture.filter(f => f.id !== state.selectedId);
+    state.selectedId = null;
+    renderAll();
+  }
+});
+
+// Raum-Tabs & Ansichts-Tabs
+function setActiveRoom(roomKey) {
+  state.activeRoom = roomKey;
+  document.querySelectorAll('#roomTabs button').forEach(b => {
+    b.classList.toggle('active', b.dataset.room === roomKey);
+  });
+  fitCameraToActiveRoom();
+}
+
+document.querySelectorAll('#roomTabs button').forEach(btn => {
+  btn.addEventListener('click', () => setActiveRoom(btn.dataset.room));
+});
+
+document.querySelectorAll('#viewTabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.viewMode = btn.dataset.view;
+    document.querySelectorAll('#viewTabs button').forEach(b => {
+      b.classList.toggle('active', b.dataset.view === state.viewMode);
+    });
+    const p2 = document.getElementById('pane2D');
+    const p3 = document.getElementById('pane3D');
+    p2.style.display = state.viewMode === '3d' ? 'none' : 'block';
+    p3.style.display = state.viewMode === '2d' ? 'none' : 'block';
+    fitCameraToActiveRoom();
+  });
+});
+
+document.getElementById('btnResetCam').addEventListener('click', fitCameraToActiveRoom);
+window.addEventListener('resize', fitCameraToActiveRoom);
+
+/* ============================================================================
+   7. EXPORT / IMPORT & CLOUD-SYNC (WEG 3)
+   ============================================================================ */
+document.getElementById('btnExport').addEventListener('click', () => {
+  const dataStr = JSON.stringify({ config: state.config, furniture: state.furniture }, null, 2);
+  const blob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `wg-raumplan-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('btnImport').addEventListener('click', () => {
+  document.getElementById('fileInput').click();
+});
+
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const parsed = JSON.parse(ev.target.result);
+      if (parsed.config) Object.assign(state.config, parsed.config);
+      if (Array.isArray(parsed.furniture)) state.furniture = parsed.furniture;
+      renderAll();
+    } catch (err) {
+      alert('Ungültige JSON-Datei!');
+    }
+  };
+  reader.readAsText(file);
+});
+
+// Cloud-Sync Modal
+const cloudModal = document.getElementById('cloudModal');
+const cloudUrlInput = document.getElementById('cloudUrlInput');
+const cloudTokenInput = document.getElementById('cloudTokenInput');
+const cloudStatusMsg = document.getElementById('cloudStatusMsg');
+
+cloudUrlInput.value = localStorage.getItem('wg_cloud_url') || '';
+cloudTokenInput.value = localStorage.getItem('wg_cloud_token') || '';
+
+document.getElementById('btnCloudModal').addEventListener('click', () => cloudModal.classList.add('open'));
+document.getElementById('btnCloseModal').addEventListener('click', () => cloudModal.classList.remove('open'));
+
+document.getElementById('btnCloudPush').addEventListener('click', async () => {
+  const url = cloudUrlInput.value.trim();
+  const token = cloudTokenInput.value.trim();
+  if (!url) { cloudStatusMsg.textContent = '⚠️ Bitte zuerst eine Cloud-URL eintragen.'; return; }
+  localStorage.setItem('wg_cloud_url', url);
+  localStorage.setItem('wg_cloud_token', token);
+
+  cloudStatusMsg.textContent = '⏳ Speichere Stand in der Cloud...';
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ updatedAt: new Date().toISOString(), config: state.config, furniture: state.furniture })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    cloudStatusMsg.textContent = `✅ Erfolgreich gespeichert (${new Date().toLocaleTimeString()})!`;
+  } catch (err) {
+    cloudStatusMsg.textContent = `❌ Fehler beim Speichern: ${err.message}`;
+  }
+});
+
+document.getElementById('btnCloudPull').addEventListener('click', async () => {
+  const url = cloudUrlInput.value.trim();
+  const token = cloudTokenInput.value.trim();
+  if (!url) { cloudStatusMsg.textContent = '⚠️ Bitte zuerst eine Cloud-URL eintragen.'; return; }
+  localStorage.setItem('wg_cloud_url', url);
+  localStorage.setItem('wg_cloud_token', token);
+
+  cloudStatusMsg.textContent = '⏳ Lade Stand aus der Cloud...';
+  try {
+    const headers = {};
+    if (token) headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const payload = data.record || data; // Unterstützt auch JSONBin.io v3 Format
+    if (payload.config) Object.assign(state.config, payload.config);
+    if (Array.isArray(payload.furniture)) state.furniture = payload.furniture;
+    renderAll();
+    cloudStatusMsg.textContent = `✅ Stand erfolgreich geladen!`;
+  } catch (err) {
+    cloudStatusMsg.textContent = `❌ Fehler beim Laden: ${err.message}`;
+  }
+});
+
+// Initiales Zentrieren & Zeichnen
+setTimeout(fitCameraToActiveRoom, 60);
+</script>
+</body>
+</html>
